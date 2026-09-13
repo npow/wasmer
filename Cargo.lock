@@ -8491,6 +8491,7 @@ dependencies = [
  "wasmer-sdk",
  "wasmer-types",
  "wasmer-vm",
+ "wasmer-wasi-nn",
  "wasmer-wasix",
  "wasmer-wast",
  "webc",

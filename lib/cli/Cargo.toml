@@ -47,6 +47,8 @@ default = [
 # 	"dep:interfaces",
 # ]
 journal = ["wasmer-wasix/journal"]
+wasi-nn = ["dep:wasmer-wasi-nn", "wasmer-wasi-nn/candle", "wasmer-wasix/wasi-nn"]
+wasi-nn-cuda = ["wasi-nn", "wasmer-wasi-nn/cuda", "wasmer-wasix/wasi-nn-cuda"]
 backend = []
 coredump = ["wasm-coredump-builder"]
 sys = ["compiler", "dep:wasmer-vm"]
@@ -139,6 +141,7 @@ wasmer-compiler-singlepass = { version = "=7.4.0", path = "../compiler-singlepas
 wasmer-compiler-llvm = { version = "=7.4.0", path = "../compiler-llvm", optional = true }
 wasmer-package.workspace = true
 wasmer-vm = { version = "=7.4.0", path = "../vm", optional = true }
+wasmer-wasi-nn = { path = "../wasi-nn", version = "0.704.0", optional = true }
 wasmer-wasix = { path = "../wasix", version = "=0.704.0", features = [
   "logging",
   "host-fs",
