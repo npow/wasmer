@@ -53,4 +53,8 @@ impl NnState {
     pub fn context_mut(&mut self, handle: u32) -> Option<&mut (dyn NnExecutionContext + 'static)> {
         self.contexts.get_mut(&handle).map(Box::as_mut)
     }
+
+    pub fn context(&self, handle: u32) -> Option<&dyn NnExecutionContext> {
+        self.contexts.get(&handle).map(Box::as_ref)
+    }
 }

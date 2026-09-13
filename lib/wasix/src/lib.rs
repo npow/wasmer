@@ -807,7 +807,10 @@ fn wasix_exports_64(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>)
 }
 
 #[cfg(feature = "wasi-nn")]
-fn wasi_ephemeral_nn_exports(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>) -> Exports {
+fn wasi_ephemeral_nn_exports(
+    mut store: &mut impl AsStoreMut,
+    env: &FunctionEnv<WasiEnv>,
+) -> Exports {
     use syscalls::*;
     let namespace = namespace! {
         "load" => Function::new_typed_with_env(&mut store, env, nn_load),

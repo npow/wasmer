@@ -123,7 +123,8 @@ impl NnExecutionContext for LinearExecutionContext {
             .chunks_exact(4)
             .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
             .collect();
-        let input = CTensor::from_vec(floats, dims, &self.device).map_err(|_| NnErrno::RuntimeError)?;
+        let input =
+            CTensor::from_vec(floats, dims, &self.device).map_err(|_| NnErrno::RuntimeError)?;
         self.input = Some(input);
         Ok(())
     }
@@ -143,7 +144,9 @@ impl NnExecutionContext for LinearExecutionContext {
             .broadcast_matmul(&weight_t)
             .map_err(|_| NnErrno::RuntimeError)?;
         if let Some(bias) = &self.bias {
-            output = output.broadcast_add(bias).map_err(|_| NnErrno::RuntimeError)?;
+            output = output
+                .broadcast_add(bias)
+                .map_err(|_| NnErrno::RuntimeError)?;
         }
         if is_vector {
             output = output.squeeze(0).map_err(|_| NnErrno::RuntimeError)?;
