@@ -372,6 +372,25 @@ example.
 
    </details>
 
+4. [**wasi-nn GPU demo**][wasi-nn-gpu-demo], runs a real, PyTorch-trained
+   digit classifier through the `wasi_ephemeral_nn` (wasi-nn) host-function
+   bridge from a `.wasm` guest, executing inference on the GPU via the
+   `candle` reference backend.
+
+   _Keywords_: wasi-nn, machine learning, inference, GPU, candle, PyTorch.
+
+   <details>
+   <summary><em>Execute the example</em></summary>
+
+   ```shell
+   $ cargo run --example wasi-nn-gpu-demo --release --features "cranelift,wasi-nn-demo-cuda"
+   ```
+
+   Drop `-cuda` (`--features "cranelift,wasi-nn-demo"`) to run the same model
+   on CPU instead.
+
+   </details>
+
 [hello-world]: ./hello_world.rs
 [engine]: ./engine.rs
 [engine-headless]: ./engine_headless.rs
@@ -390,6 +409,7 @@ example.
 [wasi]: ./wasi.rs
 [wasi-pipes]: ./wasi_pipes.rs
 [gpu-bridge]: ./gpu_bridge.rs
+[wasi-nn-gpu-demo]: ./wasi_nn_gpu_demo.rs
 [table]: ./table.rs
 [memory]: ./memory.rs
 [errors]: ./errors.rs

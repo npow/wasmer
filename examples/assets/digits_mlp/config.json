@@ -1,0 +1,18 @@
+{
+  "input_dim": 64,
+  "layers": [
+    {
+      "type": "linear",
+      "weight": "0.weight",
+      "bias": "0.bias"
+    },
+    {
+      "type": "relu"
+    },
+    {
+      "type": "linear",
+      "weight": "2.weight",
+      "bias": "2.bias"
+    }
+  ]
+}

@@ -24,6 +24,7 @@ wasmer-middlewares = { version = "=7.4.0", path = "lib/middlewares", optional = 
 wasmer-types = { version = "=7.4.0", path = "lib/types" }
 wasmer-wast = { version = "=7.4.0", path = "tests/lib/wast", optional = true }
 wasmer-wasix = { path = "lib/wasix", optional = true }
+wasmer-wasi-nn = { path = "lib/wasi-nn", optional = true }
 
 # Third party dependencies
 crossbeam-queue.workspace = true
@@ -370,6 +371,7 @@ tracing-subscriber = { workspace = true, default-features = false, features = [
 ] }
 reqwest = { workspace = true, features = ["blocking", "rustls"] }
 itertools.workspace = true
+serde_json.workspace = true
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 wasmer = { version = "=7.4.0", path = "lib/api", default-features = false, features = [
@@ -402,6 +404,8 @@ engine = []
 cache = ["wasmer-cache"]
 wast = ["wasmer-wast"]
 wasi = ["wasmer-wasix", "tokio"]
+wasi-nn-demo = ["wasi", "wasmer-wasix/wasi-nn", "dep:wasmer-wasi-nn", "wasmer-wasi-nn/candle"]
+wasi-nn-demo-cuda = ["wasi-nn-demo", "wasmer-wasix/wasi-nn-cuda", "wasmer-wasi-nn/cuda"]
 wat = ["wasmer/wat"]
 compiler = ["wasmer/compiler", "backend", "wasmer-compiler/translator"]
 singlepass = ["compiler", "wasmer-compiler-singlepass", "wasmer/singlepass"]
@@ -629,6 +633,11 @@ required-features = ["cranelift"]
 name = "gpu-bridge"
 path = "examples/gpu_bridge.rs"
 required-features = ["backend", "gpu-bridge-example"]
+
+[[example]]
+name = "wasi-nn-gpu-demo"
+path = "examples/wasi_nn_gpu_demo.rs"
+required-features = ["backend", "wasi-nn-demo"]
 
 [[example]]
 name = "throw-exception"
