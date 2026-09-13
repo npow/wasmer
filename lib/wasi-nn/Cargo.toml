@@ -10,13 +10,16 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-default = []
+default = ["candle"]
 candle = ["dep:candle-core"]
 cuda = ["candle", "candle-core/cuda"]
 
 [dependencies]
 candle-core = { version = "0.9", default-features = false, optional = true }
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "docsrs"]

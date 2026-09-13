@@ -4,16 +4,16 @@
 //! wire types they operate on; it has no dependency on `wasmer`/`wasmer-wasix`,
 //! so it can be reused (or swapped) independently of the runtime that hosts it.
 //!
-//! [`CpuStub`] is the default no-op backend. A `candle`-backed reference
-//! implementation, gated by this crate's `candle` feature, runs real inference
+//! [`CpuStub`] is the default no-op backend. [`candle_backend::CandleBackend`],
+//! gated by this crate's `candle` feature (on by default), runs real inference
 //! (CPU or CUDA) via the `candle` crate.
 
 mod backend;
 mod stub;
 mod types;
 
-// `candle_backend` is added once the reference backend lands; see the crate's
-// `candle` Cargo feature.
+#[cfg(feature = "candle")]
+pub mod candle_backend;
 
 pub use backend::{NnBackend, NnExecutionContext, NnGraph};
 pub use stub::CpuStub;
