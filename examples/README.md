@@ -356,6 +356,22 @@ example.
 
    </details>
 
+3. [**GPU bridge**][gpu-bridge], shows how a host embedder can bridge a Wasm
+   guest to a real GPU today, with zero runtime changes, by defining a
+   custom host-imported function that reads/writes guest linear memory and
+   dispatches a `wgpu` compute shader.
+
+   _Keywords_: import, function, memory, GPU, wgpu, compute shader.
+
+   <details>
+   <summary><em>Execute the example</em></summary>
+
+   ```shell
+   $ cargo run --example gpu-bridge --release --features "cranelift,gpu-bridge-example"
+   ```
+
+   </details>
+
 [hello-world]: ./hello_world.rs
 [engine]: ./engine.rs
 [engine-headless]: ./engine_headless.rs
@@ -373,6 +389,7 @@ example.
 [instance]: ./instance.rs
 [wasi]: ./wasi.rs
 [wasi-pipes]: ./wasi_pipes.rs
+[gpu-bridge]: ./gpu_bridge.rs
 [table]: ./table.rs
 [memory]: ./memory.rs
 [errors]: ./errors.rs

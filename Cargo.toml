@@ -32,6 +32,11 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
   "macros",
 ], optional = true }
+# For the gpu-bridge example, gated behind the `gpu-bridge-example` feature.
+# wgpu is a heavy compile-time dependency, so it must stay optional: dev-
+# dependencies can't be optional, which is why these live here instead.
+wgpu = { workspace = true, optional = true }
+pollster = { workspace = true, optional = true }
 
 [workspace]
 members = [
@@ -227,6 +232,7 @@ phf = "0.14.0"
 pin-project = "1.0.12"
 pin-project-lite = "0.2.10"
 pin-utils = "0.1.0"
+pollster = "1.0"
 predicates = "3.1.3"
 pretty_assertions = "1.4.0"
 proc-macro-error2 = "2.0.1"
@@ -328,6 +334,7 @@ wcgi = "0.3.0"
 wcgi-host = "0.3.0"
 web-sys = "0.3.64"
 web-time = "1.1"
+wgpu = "30.0"
 which = "8.0.0"
 windows-sys = { version = "0.61.2", default-features = false }
 xxhash-rust = { version = "0.8.10", default-features = false }
@@ -406,6 +413,9 @@ wasmer-artifact-create = ["wasmer-compiler/wasmer-artifact-create"]
 static-artifact-load = ["wasmer-compiler/static-artifact-load"]
 static-artifact-create = ["wasmer-compiler/static-artifact-create"]
 experimental-async = ["wasmer/experimental-async"]
+
+# Gates the gpu-bridge example, since wgpu is a heavy compile-time dependency.
+gpu-bridge-example = ["wgpu", "pollster"]
 
 # Testing features
 test-singlepass = ["singlepass"]
@@ -614,6 +624,11 @@ required-features = ["cranelift"]
 name = "http-dynamic-size"
 path = "examples/http_dynamic_size.rs"
 required-features = ["cranelift"]
+
+[[example]]
+name = "gpu-bridge"
+path = "examples/gpu_bridge.rs"
+required-features = ["backend", "gpu-bridge-example"]
 
 [[example]]
 name = "throw-exception"
