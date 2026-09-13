@@ -24,6 +24,7 @@ wasmer-package.workspace = true
 wasmer-wasix-types = { path = "../wasi-types", version = "0.704.0", features = [
   "enable-serde",
 ] }
+wasmer-wasi-nn = { path = "../wasi-nn", version = "0.704.0", optional = true }
 wasmer-types = { path = "../types", version = "=7.4.0", default-features = false }
 wasmer = { path = "../api", version = "=7.4.0", default-features = false, features = [
   "experimental-async",
@@ -240,6 +241,8 @@ sys-poll = []
 extra-logging = []
 sys-thread = ["tokio/rt", "tokio/time", "tokio/rt-multi-thread", "rusty_pool"]
 journal = ["tokio/fs", "wasmer-journal/log-file"]
+wasi-nn = ["dep:wasmer-wasi-nn", "wasmer-wasi-nn/candle"]
+wasi-nn-cuda = ["wasi-nn", "wasmer-wasi-nn/cuda"]
 
 # Deprecated. Kept it for compatibility
 compiler = []

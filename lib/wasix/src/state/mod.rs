@@ -21,6 +21,8 @@ mod env;
 mod func_env;
 mod handles;
 mod linker;
+#[cfg(feature = "wasi-nn")]
+mod nn;
 mod types;
 
 use std::{
@@ -50,6 +52,8 @@ use crate::{
 };
 pub(crate) use handles::*;
 pub(crate) use linker::*;
+#[cfg(feature = "wasi-nn")]
+pub(crate) use nn::NnState;
 
 /// all the rights enabled
 pub const ALL_RIGHTS: Rights = Rights::all();
@@ -148,6 +152,17 @@ pub(crate) struct WasiState {
     // TODO: should not be here, since this requires active work to resolve.
     // State should only hold active runtime state that can be reproducibly re-created.
     pub preopen: Vec<String>,
+
+    /// The wasi-nn inference engine backing `wasi_ephemeral_nn`. Defaults to
+    /// [`wasmer_wasi_nn::CpuStub`] (every `load` fails with
+    /// `unsupported_operation`) unless the embedder set one via
+    /// [`WasiEnvBuilder::nn_backend`].
+    #[cfg(feature = "wasi-nn")]
+    pub(crate) nn_backend: std::sync::Arc<dyn wasmer_wasi_nn::NnBackend>,
+    /// Handle tables for loaded graphs/execution contexts. Does not survive
+    /// `fork`, snapshot, or restore.
+    #[cfg(feature = "wasi-nn")]
+    pub(crate) nn: Mutex<NnState>,
 }
 
 impl WasiState {
@@ -258,6 +273,10 @@ impl WasiState {
             // A forked process re-registers from its own instance.
             signal_handler_registered: std::sync::atomic::AtomicBool::new(false),
             preopen: self.preopen.clone(),
+            #[cfg(feature = "wasi-nn")]
+            nn_backend: self.nn_backend.clone(),
+            #[cfg(feature = "wasi-nn")]
+            nn: Default::default(),
         }
     }
 }

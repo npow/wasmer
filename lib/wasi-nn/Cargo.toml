@@ -1,0 +1,22 @@
+[package]
+name = "wasmer-wasi-nn"
+version = "0.704.0"
+description = "Backend-agnostic ML inference trait plus a candle reference backend, used by wasmer-wasix's wasi-nn (wasi_ephemeral_nn) host functions"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+candle = ["dep:candle-core"]
+cuda = ["candle", "candle-core/cuda"]
+
+[dependencies]
+candle-core = { version = "0.9", default-features = false, optional = true }
+thiserror.workspace = true
+
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "docsrs"]

@@ -23,6 +23,8 @@ pub mod windows;
 
 pub mod journal;
 pub mod wasi;
+#[cfg(feature = "wasi-nn")]
+pub mod wasi_nn;
 pub mod wasix;
 
 use bincode::config;
@@ -34,6 +36,8 @@ use futures::{
 use tracing::instrument;
 use virtual_mio::block_on;
 pub use wasi::*;
+#[cfg(feature = "wasi-nn")]
+pub use wasi_nn::*;
 pub use wasix::*;
 use wasmer_journal::SnapshotTrigger;
 use wasmer_wasix_types::wasix::ThreadStartType;

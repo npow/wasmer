@@ -60,6 +60,7 @@ members = [
   "lib/virtual-net",
   "lib/vm",
   "lib/wai-bindgen-wasmer",
+  "lib/wasi-nn",
   "lib/wasi-types",
   "lib/wasix",
   "lib/journal",

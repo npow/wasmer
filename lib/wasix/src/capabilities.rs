@@ -10,6 +10,7 @@ pub struct Capabilities {
     pub polling: CapabilityPollingV1,
     pub max_sock_recv_size: Option<u64>,
     pub threading: CapabilityThreadingV1,
+    pub nn: CapabilityNnV1,
 }
 
 impl Capabilities {
@@ -20,6 +21,7 @@ impl Capabilities {
             polling: Default::default(),
             max_sock_recv_size: Some(16 * 1024 * 1024),
             threading: Default::default(),
+            nn: Default::default(),
         }
     }
 
@@ -32,12 +34,14 @@ impl Capabilities {
             polling,
             max_sock_recv_size,
             threading,
+            nn,
         } = other;
         self.insecure_allow_all |= insecure_allow_all;
         self.http_client.update(http_client);
         self.polling.update(polling);
         self.max_sock_recv_size = max_sock_recv_size.or(self.max_sock_recv_size);
         self.threading.update(threading);
+        self.nn.update(nn);
     }
 }
 
@@ -128,5 +132,46 @@ impl CapabilityThreadingV1 {
         }
         self.max_threads = max_threads.or(self.max_threads);
         self.enable_blocking_sleep |= enable_blocking_sleep;
+    }
+}
+
+/// Defines wasi-nn (`wasi_ephemeral_nn`) related permissions and limits.
+///
+/// Unlike [`HttpClientCapabilityV1`], this is actively enforced at every
+/// `wasi_ephemeral_nn` call site (see `syscalls/wasi_nn/`), not left as
+/// data-only plumbing for an embedder to consult.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CapabilityNnV1 {
+    /// Whether `load`/`load_by_name` are permitted at all.
+    /// (default = false)
+    pub allow: bool,
+    /// Whether `target == gpu` is permitted for a load. Ignored if `allow` is
+    /// false. (default = false)
+    pub allow_gpu: bool,
+    /// Maximum total size, in bytes, of the `graph_builder` blobs passed to a
+    /// single `load` call. [`None`] means no explicit limit.
+    pub max_model_bytes: Option<u64>,
+}
+
+impl Default for CapabilityNnV1 {
+    fn default() -> Self {
+        Self {
+            allow: false,
+            allow_gpu: false,
+            max_model_bytes: Some(512 * 1024 * 1024),
+        }
+    }
+}
+
+impl CapabilityNnV1 {
+    pub fn update(&mut self, other: CapabilityNnV1) {
+        let CapabilityNnV1 {
+            allow,
+            allow_gpu,
+            max_model_bytes,
+        } = other;
+        self.allow |= allow;
+        self.allow_gpu |= allow_gpu;
+        self.max_model_bytes = max_model_bytes.or(self.max_model_bytes);
     }
 }
