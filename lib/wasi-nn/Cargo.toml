@@ -11,11 +11,13 @@ rust-version.workspace = true
 
 [features]
 default = ["candle"]
-candle = ["dep:candle-core"]
+candle = ["dep:candle-core", "dep:serde", "dep:serde_json"]
 cuda = ["candle", "candle-core/cuda"]
 
 [dependencies]
 candle-core = { version = "0.9", default-features = false, optional = true }
+serde = { workspace = true, default-features = false, features = ["derive", "std"], optional = true }
+serde_json = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [dev-dependencies]

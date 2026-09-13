@@ -3,7 +3,8 @@
 //! End-to-end test for the `wasi_ephemeral_nn` host-function namespace: drives
 //! a real guest module through `load` -> `init_execution_context` ->
 //! `set_input` -> `compute` -> `get_output` as actual wasm imports, backed by
-//! the real (non-mocked) `candle`-backed `CandleBackend`. Unlike
+//! the real (non-mocked) `candle`-backed `CandleBackend`, on **both** `Cpu`
+//! and (when the `wasi-nn-cuda` feature is on) `Gpu` execution targets. Unlike
 //! `lib/wasi-nn/src/candle_backend.rs`'s unit tests -- which call the
 //! `NnBackend` trait directly and never touch a wasm instance -- this exercises
 //! the actual wasm-level ABI: raw i32 signatures and the
@@ -100,18 +101,21 @@ const WASI_EPHEMERAL_NN_WAT: &str = r#"
 // Guest memory layout the Rust harness writes into (and reads results back
 // from) between calls into the guest's thin `wasi_ephemeral_nn` wrappers.
 // Generously spaced out; nothing here needs more than the module's two wasm
-// pages (128 KiB).
-const GRAPH_BUILDER_OFFSET: u32 = 0; // WasmGraphBuilder { ptr: u32, len: u32 }, 8 bytes
-const GRAPH_OUT_OFFSET: u32 = 8; // u32 out-param, 4 bytes
-const CONTEXT_OUT_OFFSET: u32 = 12; // u32 out-param, 4 bytes
-const DIMS_OFFSET: u32 = 16; // one u32 dimension value, 4 bytes
+// pages (128 KiB). `load`'s `$graph_builder_array` now carries two blobs
+// (config JSON, then safetensors weights -- see `CandleBackend`'s doc
+// comment), so it needs two `WasmGraphBuilder` records back to back.
+const GRAPH_BUILDER_ARRAY_OFFSET: u32 = 0; // 2x WasmGraphBuilder { ptr: u32, len: u32 }, 16 bytes
+const GRAPH_OUT_OFFSET: u32 = 16; // u32 out-param, 4 bytes
+const CONTEXT_OUT_OFFSET: u32 = 20; // u32 out-param, 4 bytes
+const DIMS_OFFSET: u32 = 24; // one u32 dimension value, 4 bytes
 const NAME_OFFSET: u32 = 32; // `load_by_name`'s name bytes
 const INPUT_DATA_OFFSET: u32 = 64; // two f32, 8 bytes
 const TENSOR_OFFSET: u32 = 96; // WasmTensor record, 20 bytes
 const OUTPUT_BUFFER_OFFSET: u32 = 128; // room for output (3 f32 = 12 bytes needed)
 const OUTPUT_BUFFER_CAPACITY: i32 = 64;
 const BYTES_WRITTEN_OFFSET: u32 = 256; // u32 out-param, 4 bytes
-const MODEL_BYTES_OFFSET: u32 = 4096; // safetensors blob, clear of everything above
+const CONFIG_BYTES_OFFSET: u32 = 4096; // config.json bytes
+const WEIGHTS_BYTES_OFFSET: u32 = 8192; // safetensors blob, clear of the config
 
 /// Packs a `WasmGraphBuilder { ptr: u32, len: u32 }` record: `#[repr(C)]`,
 /// natural alignment, 8 bytes total. That type is private to
@@ -145,11 +149,14 @@ fn pack_tensor(
     buf
 }
 
-/// Builds a tiny `y = x @ W^T + b` safetensors blob (2 in, 3 out, fixed
-/// weights), with no network access and no external model file -- the same
-/// approach as `CandleBackend`'s own (private, hence duplicated here)
-/// `candle_backend::tests::tiny_linear_safetensors` helper.
-fn tiny_linear_safetensors() -> Vec<u8> {
+/// Builds a tiny `y = x @ W^T + b` (config_json, safetensors_bytes) pair --
+/// a one-layer instance of `CandleBackend`'s general layer-stack format, with
+/// no network access and no external model file. Same shape as
+/// `candle_backend::tests::tiny_mlp`, minus the second layer, since this test
+/// only needs to prove the wasm-level ABI plumbing, not model generality
+/// (that's `candle_backend`'s job -- this just has to load *some* valid
+/// two-blob graph).
+fn tiny_linear_graph() -> (Vec<u8>, Vec<u8>) {
     let dev = Device::Cpu;
     // W: [[1, 0], [0, 1], [1, 1]] (3x2), b: [0, 0, 1]
     let weight = CTensor::from_vec(vec![1f32, 0., 0., 1., 1., 1.], (3, 2), &dev).unwrap();
@@ -161,11 +168,20 @@ fn tiny_linear_safetensors() -> Vec<u8> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("model.safetensors");
     candle_core::safetensors::save(&tensors, &path).unwrap();
-    std::fs::read(path).unwrap()
+    let weights_bytes = std::fs::read(path).unwrap();
+
+    let config = serde_json::json!({
+        "layers": [{"type": "linear", "weight": "weight", "bias": "bias"}]
+    });
+    let config_bytes = serde_json::to_vec(&config).unwrap();
+    (config_bytes, weights_bytes)
 }
 
-#[test]
-fn wasi_ephemeral_nn_end_to_end_cpu_inference() {
+/// Runs the full `load` -> `init_execution_context` -> `set_input` ->
+/// `compute` -> `get_output` sequence against a real wasm guest and the real
+/// `CandleBackend`, on whichever `target` is passed in, and returns the
+/// decoded output tensor.
+fn run_wasi_ephemeral_nn(target: ExecutionTarget) -> Vec<f32> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -177,6 +193,7 @@ fn wasi_ephemeral_nn_end_to_end_cpu_inference() {
 
     let mut builder = WasiEnv::builder("wasi-nn-test").engine(store.engine().clone());
     builder.capabilities_mut().nn.allow = true;
+    builder.capabilities_mut().nn.allow_gpu = true;
     builder.set_nn_backend(Arc::new(CandleBackend::new()));
 
     let (instance, wasi_env) = builder
@@ -215,30 +232,36 @@ fn wasi_ephemeral_nn_end_to_end_cpu_inference() {
         .expect("do_get_output export");
 
     // -- load() --
-    let model_bytes = tiny_linear_safetensors();
+    let (config_bytes, weights_bytes) = tiny_linear_graph();
     {
         let view = memory.view(&store);
-        view.write(MODEL_BYTES_OFFSET as u64, &model_bytes)
-            .expect("write model bytes");
-        let builder_record = pack_graph_builder(MODEL_BYTES_OFFSET, model_bytes.len() as u32);
-        view.write(GRAPH_BUILDER_OFFSET as u64, &builder_record)
-            .expect("write graph builder record");
+        view.write(CONFIG_BYTES_OFFSET as u64, &config_bytes)
+            .expect("write config bytes");
+        view.write(WEIGHTS_BYTES_OFFSET as u64, &weights_bytes)
+            .expect("write weights bytes");
+        let builder_records = [
+            pack_graph_builder(CONFIG_BYTES_OFFSET, config_bytes.len() as u32),
+            pack_graph_builder(WEIGHTS_BYTES_OFFSET, weights_bytes.len() as u32),
+        ]
+        .concat();
+        view.write(GRAPH_BUILDER_ARRAY_OFFSET as u64, &builder_records)
+            .expect("write graph builder array");
     }
 
     let errno = do_load
         .call(
             &mut store,
-            GRAPH_BUILDER_OFFSET as i32,
-            1, // one graph_builder blob in the $graph_builder_array
+            GRAPH_BUILDER_ARRAY_OFFSET as i32,
+            2, // two graph_builder blobs: config, then weights
             GraphEncoding::Autodetect as i32,
-            ExecutionTarget::Cpu as i32,
+            target as i32,
             GRAPH_OUT_OFFSET as i32,
         )
         .expect("call do_load") as u32;
     assert_eq!(
         errno,
         NnErrno::Success.to_u32(),
-        "load failed with errno {errno}"
+        "load failed with errno {errno} (target {target:?})"
     );
 
     let graph = {
@@ -339,8 +362,6 @@ fn wasi_ephemeral_nn_end_to_end_cpu_inference() {
             .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
             .collect()
     };
-    // [3,4] @ [[1,0],[0,1],[1,1]]^T + [0,0,1] = [3, 4, 3+4+1] = [3, 4, 8]
-    assert_eq!(output, vec![3.0, 4.0, 8.0]);
 
     // -- load_by_name(), bonus coverage of the sixth import: `CandleBackend`
     // doesn't implement it, so the default `NnBackend::load_by_name` must
@@ -365,4 +386,23 @@ fn wasi_ephemeral_nn_end_to_end_cpu_inference() {
     );
 
     wasi_env.on_exit(&mut store, None);
+    output
+}
+
+#[test]
+fn wasi_ephemeral_nn_end_to_end_cpu_inference() {
+    let output = run_wasi_ephemeral_nn(ExecutionTarget::Cpu);
+    // [3,4] @ [[1,0],[0,1],[1,1]]^T + [0,0,1] = [3, 4, 3+4+1] = [3, 4, 8]
+    assert_eq!(output, vec![3.0, 4.0, 8.0]);
+}
+
+/// Closes the CPU-only gap in the original version of this test: the same
+/// wasm-level `wasi_ephemeral_nn` sequence, but with `target = gpu`, so this
+/// actually proves a `.wasm` guest can drive real CUDA compute through the
+/// host bridge -- not just `CandleBackend`'s own Rust-level unit test.
+#[cfg(feature = "wasi-nn-cuda")]
+#[test]
+fn wasi_ephemeral_nn_end_to_end_gpu_inference() {
+    let output = run_wasi_ephemeral_nn(ExecutionTarget::Gpu);
+    assert_eq!(output, vec![3.0, 4.0, 8.0]);
 }
