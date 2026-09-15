@@ -357,11 +357,12 @@ example.
    </details>
 
 3. [**GPU bridge**][gpu-bridge], shows how a host embedder can bridge a Wasm
-   guest to a real GPU today, with zero runtime changes, by defining a
-   custom host-imported function that reads/writes guest linear memory and
-   dispatches a `wgpu` compute shader.
+   guest to a real GPU today, with zero runtime changes, via a small
+   buffer/pipeline handle ABI: the guest owns its GPU resources and drives
+   its own compute graph (upload, compile guest-supplied WGSL, dispatch,
+   read back) across multiple calls, instead of one hardcoded operation.
 
-   _Keywords_: import, function, memory, GPU, wgpu, compute shader.
+   _Keywords_: import, function, memory, GPU, wgpu, compute shader, handles.
 
    <details>
    <summary><em>Execute the example</em></summary>
