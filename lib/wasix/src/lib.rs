@@ -806,6 +806,23 @@ fn wasix_exports_64(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>)
     namespace
 }
 
+#[cfg(feature = "wasi-webgpu-spike")]
+fn wasi_webgpu_spike_exports(
+    mut store: &mut impl AsStoreMut,
+    env: &FunctionEnv<WasiEnv>,
+) -> Exports {
+    use syscalls::*;
+    let engine_supports_async = store.as_store_ref().engine().supports_async();
+    let namespace = namespace! {
+        "request_adapter_spike" => if engine_supports_async {
+            Function::new_typed_with_env_async(&mut store, env, request_adapter_spike)
+        } else {
+            Function::new_typed_with_env(&mut store, env, request_adapter_spike_not_supported)
+        },
+    };
+    namespace
+}
+
 // TODO: split function into two variants, one for JS and one for sys.
 // (this will make code less messy)
 fn import_object_for_all_wasi_versions(
@@ -828,6 +845,14 @@ fn import_object_for_all_wasi_versions(
         "wasix_32v1" => exports_wasix_32v1,
         "wasix_64v1" => exports_wasix_64v1,
     };
+
+    #[cfg(feature = "wasi-webgpu-spike")]
+    {
+        let exports_wasi_webgpu_spike = wasi_webgpu_spike_exports(store, env);
+        imports.extend(&imports! {
+            "wasi_webgpu_v0" => exports_wasi_webgpu_spike,
+        });
+    }
 
     imports
 }

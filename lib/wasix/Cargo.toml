@@ -19,6 +19,11 @@ path = "tests/wasm_tests/mod.rs"
 harness = false
 required-features = ["sys-thread"]
 
+[[test]]
+name = "wasi_webgpu_spike"
+path = "tests/wasi_webgpu_spike.rs"
+required-features = ["wasi-webgpu-spike", "sys-thread"]
+
 [dependencies]
 wasmer-package.workspace = true
 wasmer-wasix-types = { path = "../wasi-types", version = "0.704.0", features = [
@@ -240,6 +245,9 @@ sys-poll = []
 extra-logging = []
 sys-thread = ["tokio/rt", "tokio/time", "tokio/rt-multi-thread", "rusty_pool"]
 journal = ["tokio/fs", "wasmer-journal/log-file"]
+# Phase-0 spike: one fake async wasix host import proving guest suspend/resume
+# works through a real wasm guest. Not part of any real wasi:webgpu ABI.
+wasi-webgpu-spike = ["tokio/time"]
 
 # Deprecated. Kept it for compatibility
 compiler = []
