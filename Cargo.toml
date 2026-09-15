@@ -420,6 +420,8 @@ experimental-async = ["wasmer/experimental-async"]
 
 # Gates the gpu-bridge example, since wgpu is a heavy compile-time dependency.
 gpu-bridge-example = ["wgpu", "pollster"]
+# Gates the gpu-bridge-train example (guest-owned training loop), same reason.
+gpu-bridge-train-example = ["wgpu", "pollster"]
 
 # Testing features
 test-singlepass = ["singlepass"]
@@ -633,6 +635,11 @@ required-features = ["cranelift"]
 name = "gpu-bridge"
 path = "examples/gpu_bridge.rs"
 required-features = ["backend", "gpu-bridge-example"]
+
+[[example]]
+name = "gpu-bridge-train"
+path = "examples/gpu_bridge_train.rs"
+required-features = ["backend", "gpu-bridge-train-example"]
 
 [[example]]
 name = "wasi-nn-gpu-demo"
