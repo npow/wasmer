@@ -25,9 +25,9 @@ path = "tests/wasi_nn.rs"
 required-features = ["wasi-nn", "sys-thread"]
 
 [[test]]
-name = "wasi_webgpu_spike"
-path = "tests/wasi_webgpu_spike.rs"
-required-features = ["wasi-webgpu-spike", "sys-thread"]
+name = "wasi_webgpu_concurrency"
+path = "tests/wasi_webgpu_concurrency.rs"
+required-features = ["wasi-webgpu-concurrency", "sys-thread"]
 
 [dependencies]
 wasmer-package.workspace = true
@@ -259,9 +259,11 @@ journal = ["tokio/fs", "wasmer-journal/log-file"]
 wasi-nn = ["dep:wasmer-wasi-nn", "wasmer-wasi-nn/candle"]
 wasi-nn-cuda = ["wasi-nn", "wasmer-wasi-nn/cuda"]
 
-# Phase-0 spike: one fake async wasix host import proving guest suspend/resume
-# works through a real wasm guest. Not part of any real wasi:webgpu ABI.
-wasi-webgpu-spike = ["tokio/time"]
+# Phase 1 of the wasi:webgpu async spike: the Component Model async ABI's
+# documented minimal single-active-task-at-a-time subset (start/join/wait/
+# drop), built on the same suspend/resume primitive Phase 0 proved. Not part
+# of any real wasi:webgpu ABI -- see syscalls/wasi_webgpu/mod.rs.
+wasi-webgpu-concurrency = ["tokio/time"]
 
 # Deprecated. Kept it for compatibility
 compiler = []

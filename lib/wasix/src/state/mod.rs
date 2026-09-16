@@ -24,6 +24,8 @@ mod linker;
 #[cfg(feature = "wasi-nn")]
 mod nn;
 mod types;
+#[cfg(feature = "wasi-webgpu-concurrency")]
+mod webgpu;
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -54,6 +56,8 @@ pub(crate) use handles::*;
 pub(crate) use linker::*;
 #[cfg(feature = "wasi-nn")]
 pub(crate) use nn::NnState;
+#[cfg(feature = "wasi-webgpu-concurrency")]
+pub(crate) use webgpu::{WaitOutcome, WebgpuErrno, WebgpuState};
 
 /// all the rights enabled
 pub const ALL_RIGHTS: Rights = Rights::all();
@@ -163,6 +167,10 @@ pub(crate) struct WasiState {
     /// `fork`, snapshot, or restore.
     #[cfg(feature = "wasi-nn")]
     pub(crate) nn: Mutex<NnState>,
+    /// Handle tables for `wasi_webgpu_v0`'s Phase 1 subtasks/waitable sets.
+    /// Does not survive `fork`, snapshot, or restore.
+    #[cfg(feature = "wasi-webgpu-concurrency")]
+    pub(crate) webgpu: Mutex<WebgpuState>,
 }
 
 impl WasiState {
@@ -277,6 +285,8 @@ impl WasiState {
             nn_backend: self.nn_backend.clone(),
             #[cfg(feature = "wasi-nn")]
             nn: Default::default(),
+            #[cfg(feature = "wasi-webgpu-concurrency")]
+            webgpu: Default::default(),
         }
     }
 }
