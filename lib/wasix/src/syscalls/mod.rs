@@ -25,6 +25,8 @@ pub mod journal;
 pub mod wasi;
 #[cfg(feature = "wasi-nn")]
 pub mod wasi_nn;
+#[cfg(feature = "wasi-webgpu-spike")]
+pub mod wasi_webgpu_spike;
 pub mod wasix;
 
 use bincode::config;
@@ -38,6 +40,8 @@ use virtual_mio::block_on;
 pub use wasi::*;
 #[cfg(feature = "wasi-nn")]
 pub use wasi_nn::*;
+#[cfg(feature = "wasi-webgpu-spike")]
+pub use wasi_webgpu_spike::*;
 pub use wasix::*;
 use wasmer_journal::SnapshotTrigger;
 use wasmer_wasix_types::wasix::ThreadStartType;

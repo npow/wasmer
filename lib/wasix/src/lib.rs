@@ -807,10 +807,7 @@ fn wasix_exports_64(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>)
 }
 
 #[cfg(feature = "wasi-nn")]
-fn wasi_ephemeral_nn_exports(
-    mut store: &mut impl AsStoreMut,
-    env: &FunctionEnv<WasiEnv>,
-) -> Exports {
+fn wasi_ephemeral_nn_exports(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>) -> Exports {
     use syscalls::*;
     let namespace = namespace! {
         "load" => Function::new_typed_with_env(&mut store, env, nn_load),
@@ -819,6 +816,20 @@ fn wasi_ephemeral_nn_exports(
         "set_input" => Function::new_typed_with_env(&mut store, env, nn_set_input),
         "compute" => Function::new_typed_with_env(&mut store, env, nn_compute),
         "get_output" => Function::new_typed_with_env(&mut store, env, nn_get_output),
+    };
+    namespace
+}
+
+#[cfg(feature = "wasi-webgpu-spike")]
+fn wasi_webgpu_spike_exports(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>) -> Exports {
+    use syscalls::*;
+    let engine_supports_async = store.as_store_ref().engine().supports_async();
+    let namespace = namespace! {
+        "request_adapter_spike" => if engine_supports_async {
+            Function::new_typed_with_env_async(&mut store, env, request_adapter_spike)
+        } else {
+            Function::new_typed_with_env(&mut store, env, request_adapter_spike_not_supported)
+        },
     };
     namespace
 }
@@ -851,6 +862,14 @@ fn import_object_for_all_wasi_versions(
         let exports_wasi_ephemeral_nn = wasi_ephemeral_nn_exports(store, env);
         imports.extend(&imports! {
             "wasi_ephemeral_nn" => exports_wasi_ephemeral_nn,
+        });
+    }
+
+    #[cfg(feature = "wasi-webgpu-spike")]
+    {
+        let exports_wasi_webgpu_spike = wasi_webgpu_spike_exports(store, env);
+        imports.extend(&imports! {
+            "wasi_webgpu_v0" => exports_wasi_webgpu_spike,
         });
     }
 
