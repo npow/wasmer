@@ -840,6 +840,10 @@ fn wasi_webgpu_concurrency_exports(
             Function::new_typed_with_env(&mut store, env, waitable_set_wait_not_supported)
         },
         "subtask_drop" => Function::new_typed_with_env(&mut store, env, subtask_drop),
+        "future_new" => Function::new_typed_with_env(&mut store, env, future_new),
+        "future_resolve_after" => Function::new_typed_with_env(&mut store, env, future_resolve_after),
+        "future_read" => Function::new_typed_with_env(&mut store, env, future_read),
+        "future_drop" => Function::new_typed_with_env(&mut store, env, future_drop),
     };
     namespace
 }

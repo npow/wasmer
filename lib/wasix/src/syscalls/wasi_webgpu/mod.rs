@@ -26,6 +26,23 @@
 //! deterministically -- a test/demo knob, not part of any real ABI this
 //! stands in for.
 //!
+//! **`future.*`**, on top of Phase 2a: [`future_new`]/[`future_read`]/
+//! [`future_drop`] add a second waitable kind alongside subtasks -- a
+//! future is a one-shot value, order-enforced (`future_read` returns
+//! immediately if a value is already there) or suspend-based (returns
+//! [`crate::state::WebgpuErrno::Blocked`], then the guest joins it into a
+//! waitable set exactly like a subtask). No separate `[future-writer]`/
+//! `[future-reader]` resource-pair split like the real spec -- one handle,
+//! matching this crate's existing single-handle convention. No guest-facing
+//! `future_write` either: this bridge's only realistic producer of a
+//! future's value is a fake async host/GPU operation, so
+//! [`future_resolve_after`] (mirroring `request_adapter_start`'s spawn-a-
+//! background-task shape, decoupled from allocation) fills that role
+//! instead. `stream.*` is deliberately left for a follow-up once this
+//! pattern is proven; `backpressure.*`/`context.*`/`thread.*` remain out of
+//! scope, per this session's own Phase 2 research, until real multi-task
+//! reentrancy exists.
+//!
 //! This is still NOT wasi:webgpu. It implements none of that WIT interface's
 //! actual method names, its canonical ABI lowering, or the Component Model
 //! itself -- it is a hand-written wasix host-import ABI (core wasm, no
@@ -44,12 +61,20 @@
 //! Gated by this crate's `wasi-webgpu-concurrency` feature and, at every call
 //! site, by [`crate::capabilities::CapabilityWebgpuSpikeV1`].
 
+mod future_drop;
+mod future_new;
+mod future_read;
+mod future_resolve_after;
 mod request_adapter_start;
 mod subtask_drop;
 mod waitable_join;
 mod waitable_set_new;
 mod waitable_set_wait;
 
+pub use future_drop::*;
+pub use future_new::*;
+pub use future_read::*;
+pub use future_resolve_after::*;
 pub use request_adapter_start::*;
 pub use subtask_drop::*;
 pub use waitable_join::*;

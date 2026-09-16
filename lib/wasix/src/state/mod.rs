@@ -57,7 +57,7 @@ pub(crate) use linker::*;
 #[cfg(feature = "wasi-nn")]
 pub(crate) use nn::NnState;
 #[cfg(feature = "wasi-webgpu-concurrency")]
-pub(crate) use webgpu::{WaitOutcome, WebgpuErrno, WebgpuState};
+pub(crate) use webgpu::{WaitOutcome, WaitableKind, WebgpuErrno, WebgpuState};
 
 /// all the rights enabled
 pub const ALL_RIGHTS: Rights = Rights::all();
