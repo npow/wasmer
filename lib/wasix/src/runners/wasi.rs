@@ -28,6 +28,8 @@ pub struct WasiRunner {
     stdin: Option<ArcBoxFile>,
     stdout: Option<ArcBoxFile>,
     stderr: Option<ArcBoxFile>,
+    #[cfg(feature = "wasi-nn")]
+    nn_backend: Option<Arc<dyn wasmer_wasi_nn::NnBackend>>,
 }
 
 pub enum PackageOrHash<'a> {
@@ -184,6 +186,16 @@ impl WasiRunner {
         self
     }
 
+    /// Set the wasi-nn backend instances run through this runner should use.
+    /// Also enable `capabilities_mut().nn.allow` (and `.allow_gpu`, if the
+    /// backend targets the GPU) — the capability gate is checked
+    /// independently of whether a backend is attached.
+    #[cfg(feature = "wasi-nn")]
+    pub fn with_nn_backend(&mut self, backend: Arc<dyn wasmer_wasi_nn::NnBackend>) -> &mut Self {
+        self.nn_backend = Some(backend);
+        self
+    }
+
     #[cfg(feature = "journal")]
     pub fn with_snapshot_trigger(&mut self, on: SnapshotTrigger) -> &mut Self {
         self.wasi.snapshot_on.push(on);
@@ -335,6 +347,11 @@ impl WasiRunner {
 
         self.wasi
             .prepare_webc_env(&mut builder, container_mounts, wasi, root_fs)?;
+
+        #[cfg(feature = "wasi-nn")]
+        if let Some(backend) = &self.nn_backend {
+            builder.set_nn_backend(backend.clone());
+        }
 
         if let Some(stdin) = &self.stdin {
             builder.set_stdin(Box::new(stdin.clone()));

@@ -29,6 +29,11 @@ name = "wasi_webgpu_spike"
 path = "tests/wasi_webgpu_spike.rs"
 required-features = ["wasi-webgpu-spike", "sys-thread"]
 
+[[test]]
+name = "wasi_runner_nn"
+path = "tests/wasi_runner_nn.rs"
+required-features = ["wasi-nn", "sys-thread"]
+
 [dependencies]
 wasmer-package.workspace = true
 wasmer-wasix-types = { path = "../wasi-types", version = "0.704.0", features = [
