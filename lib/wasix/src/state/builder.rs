@@ -88,6 +88,12 @@ pub struct WasiEnvBuilder {
 
     pub(super) capabilities: Capabilities,
 
+    /// The wasi-nn inference engine to back `wasi_ephemeral_nn` calls. `None`
+    /// means every `load`/`load_by_name` call fails with `unsupported_operation`
+    /// regardless of [`Capabilities::nn`], matching [`wasmer_wasi_nn::CpuStub`].
+    #[cfg(feature = "wasi-nn")]
+    pub(super) nn_backend: Option<Arc<dyn wasmer_wasi_nn::NnBackend>>,
+
     #[cfg(feature = "journal")]
     pub(super) snapshot_on: Vec<SnapshotTrigger>,
 
@@ -842,6 +848,19 @@ impl WasiEnvBuilder {
         self.capabilities = capabilities;
     }
 
+    /// Sets the inference engine backing `wasi_ephemeral_nn`. Has no effect
+    /// unless [`Capabilities::nn`]'s `allow` is also set.
+    #[cfg(feature = "wasi-nn")]
+    pub fn nn_backend(mut self, backend: Arc<dyn wasmer_wasi_nn::NnBackend>) -> Self {
+        self.set_nn_backend(backend);
+        self
+    }
+
+    #[cfg(feature = "wasi-nn")]
+    pub fn set_nn_backend(&mut self, backend: Arc<dyn wasmer_wasi_nn::NnBackend>) {
+        self.nn_backend = Some(backend);
+    }
+
     #[cfg(feature = "journal")]
     pub fn add_snapshot_trigger(&mut self, on: SnapshotTrigger) {
         self.snapshot_on.push(on);
@@ -1012,6 +1031,13 @@ impl WasiEnvBuilder {
             envs: std::sync::Mutex::new(conv_env_vars(self.envs)),
             signals: std::sync::Mutex::new(self.signals.iter().map(|s| (s.sig, s.disp)).collect()),
             signal_handler_registered: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(feature = "wasi-nn")]
+            nn_backend: self
+                .nn_backend
+                .clone()
+                .unwrap_or_else(|| Arc::new(wasmer_wasi_nn::CpuStub)),
+            #[cfg(feature = "wasi-nn")]
+            nn: Default::default(),
         };
 
         let runtime = self.runtime.unwrap_or_else(|| {

@@ -256,6 +256,16 @@ pub struct Wasi {
     #[clap(long)]
     pub http_client: bool,
 
+    /// Allow this instance to load and run ML models via wasi-nn.
+    #[cfg(feature = "wasi-nn")]
+    #[clap(long = "enable-wasi-nn")]
+    pub enable_wasi_nn: bool,
+
+    /// Additionally allow wasi-nn graphs to target the GPU. Implies --enable-wasi-nn.
+    #[cfg(feature = "wasi-nn")]
+    #[clap(long = "wasi-nn-gpu")]
+    pub wasi_nn_gpu: bool,
+
     /// Require WASI modules to only import 1 version of WASI.
     #[clap(long = "deny-multiple-wasi-versions")]
     pub deny_multiple_wasi_versions: bool,
@@ -439,6 +449,13 @@ impl Wasi {
 
         *builder.capabilities_mut() = self.capabilities();
 
+        #[cfg(feature = "wasi-nn")]
+        if self.enable_wasi_nn || self.wasi_nn_gpu {
+            builder.set_nn_backend(Arc::new(
+                wasmer_wasi_nn::candle_backend::CandleBackend::new(),
+            ));
+        }
+
         #[cfg(feature = "journal")]
         {
             for trigger in self.snapshot_on.iter().cloned() {
@@ -594,6 +611,12 @@ impl Wasi {
 
         if self.http_client {
             caps.http_client = wasmer_wasix::http::HttpClientCapabilityV1::new_allow_all();
+        }
+
+        #[cfg(feature = "wasi-nn")]
+        {
+            caps.nn.allow = self.enable_wasi_nn || self.wasi_nn_gpu;
+            caps.nn.allow_gpu = self.wasi_nn_gpu;
         }
 
         if let Some(enable_async_threads) = self.enable_async_threads {

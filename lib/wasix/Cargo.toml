@@ -20,6 +20,11 @@ harness = false
 required-features = ["sys-thread"]
 
 [[test]]
+name = "wasi_nn"
+path = "tests/wasi_nn.rs"
+required-features = ["wasi-nn", "sys-thread"]
+
+[[test]]
 name = "wasi_webgpu_spike"
 path = "tests/wasi_webgpu_spike.rs"
 required-features = ["wasi-webgpu-spike", "sys-thread"]
@@ -29,6 +34,7 @@ wasmer-package.workspace = true
 wasmer-wasix-types = { path = "../wasi-types", version = "0.704.0", features = [
   "enable-serde",
 ] }
+wasmer-wasi-nn = { path = "../wasi-nn", version = "0.704.0", optional = true }
 wasmer-types = { path = "../types", version = "=7.4.0", default-features = false }
 wasmer = { path = "../api", version = "=7.4.0", default-features = false, features = [
   "experimental-async",
@@ -173,6 +179,11 @@ wasmer = { path = "../api", version = "=7.4.0", default-features = false, featur
   "wat",
   "js-serializable-module",
 ] }
+# Matches lib/wasi-nn/Cargo.toml's pin. `wasmer-wasi-nn` doesn't re-export
+# `candle_core`, and the `wasi_nn` integration test needs it directly to build
+# a synthetic safetensors blob the same way
+# `candle_backend::tests::tiny_linear_safetensors` does.
+candle-core = { version = "0.9", default-features = false }
 tokio = { workspace = true, features = [
   "sync",
   "macros",
@@ -245,6 +256,9 @@ sys-poll = []
 extra-logging = []
 sys-thread = ["tokio/rt", "tokio/time", "tokio/rt-multi-thread", "rusty_pool"]
 journal = ["tokio/fs", "wasmer-journal/log-file"]
+wasi-nn = ["dep:wasmer-wasi-nn", "wasmer-wasi-nn/candle"]
+wasi-nn-cuda = ["wasi-nn", "wasmer-wasi-nn/cuda"]
+
 # Phase-0 spike: one fake async wasix host import proving guest suspend/resume
 # works through a real wasm guest. Not part of any real wasi:webgpu ABI.
 wasi-webgpu-spike = ["tokio/time"]

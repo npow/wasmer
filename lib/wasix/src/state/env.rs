@@ -130,6 +130,10 @@ impl WasiEnvInit {
                 signals: std::sync::Mutex::new(self.state.signals.lock().unwrap().deref().clone()),
                 signal_handler_registered: std::sync::atomic::AtomicBool::new(false),
                 preopen: self.state.preopen.clone(),
+                #[cfg(feature = "wasi-nn")]
+                nn_backend: self.state.nn_backend.clone(),
+                #[cfg(feature = "wasi-nn")]
+                nn: Default::default(),
             },
             runtime: self.runtime.clone(),
             webc_dependencies: self.webc_dependencies.clone(),

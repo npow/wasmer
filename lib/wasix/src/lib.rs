@@ -806,11 +806,22 @@ fn wasix_exports_64(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>)
     namespace
 }
 
+#[cfg(feature = "wasi-nn")]
+fn wasi_ephemeral_nn_exports(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>) -> Exports {
+    use syscalls::*;
+    let namespace = namespace! {
+        "load" => Function::new_typed_with_env(&mut store, env, nn_load),
+        "load_by_name" => Function::new_typed_with_env(&mut store, env, nn_load_by_name),
+        "init_execution_context" => Function::new_typed_with_env(&mut store, env, nn_init_execution_context),
+        "set_input" => Function::new_typed_with_env(&mut store, env, nn_set_input),
+        "compute" => Function::new_typed_with_env(&mut store, env, nn_compute),
+        "get_output" => Function::new_typed_with_env(&mut store, env, nn_get_output),
+    };
+    namespace
+}
+
 #[cfg(feature = "wasi-webgpu-spike")]
-fn wasi_webgpu_spike_exports(
-    mut store: &mut impl AsStoreMut,
-    env: &FunctionEnv<WasiEnv>,
-) -> Exports {
+fn wasi_webgpu_spike_exports(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>) -> Exports {
     use syscalls::*;
     let engine_supports_async = store.as_store_ref().engine().supports_async();
     let namespace = namespace! {
@@ -845,6 +856,14 @@ fn import_object_for_all_wasi_versions(
         "wasix_32v1" => exports_wasix_32v1,
         "wasix_64v1" => exports_wasix_64v1,
     };
+
+    #[cfg(feature = "wasi-nn")]
+    {
+        let exports_wasi_ephemeral_nn = wasi_ephemeral_nn_exports(store, env);
+        imports.extend(&imports! {
+            "wasi_ephemeral_nn" => exports_wasi_ephemeral_nn,
+        });
+    }
 
     #[cfg(feature = "wasi-webgpu-spike")]
     {

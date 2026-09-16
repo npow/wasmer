@@ -24,6 +24,7 @@ wasmer-middlewares = { version = "=7.4.0", path = "lib/middlewares", optional = 
 wasmer-types = { version = "=7.4.0", path = "lib/types" }
 wasmer-wast = { version = "=7.4.0", path = "tests/lib/wast", optional = true }
 wasmer-wasix = { path = "lib/wasix", optional = true }
+wasmer-wasi-nn = { path = "lib/wasi-nn", optional = true }
 
 # Third party dependencies
 crossbeam-queue.workspace = true
@@ -32,6 +33,11 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
   "macros",
 ], optional = true }
+# For the gpu-bridge example, gated behind the `gpu-bridge-example` feature.
+# wgpu is a heavy compile-time dependency, so it must stay optional: dev-
+# dependencies can't be optional, which is why these live here instead.
+wgpu = { workspace = true, optional = true }
+pollster = { workspace = true, optional = true }
 
 [workspace]
 members = [
@@ -60,6 +66,7 @@ members = [
   "lib/virtual-net",
   "lib/vm",
   "lib/wai-bindgen-wasmer",
+  "lib/wasi-nn",
   "lib/wasi-types",
   "lib/wasix",
   "lib/journal",
@@ -226,6 +233,7 @@ phf = "0.14.0"
 pin-project = "1.0.12"
 pin-project-lite = "0.2.10"
 pin-utils = "0.1.0"
+pollster = "1.0"
 predicates = "3.1.3"
 pretty_assertions = "1.4.0"
 proc-macro-error2 = "2.0.1"
@@ -327,6 +335,7 @@ wcgi = "0.3.0"
 wcgi-host = "0.3.0"
 web-sys = "0.3.64"
 web-time = "1.1"
+wgpu = "30.0"
 which = "8.0.0"
 windows-sys = { version = "0.61.2", default-features = false }
 xxhash-rust = { version = "0.8.10", default-features = false }
@@ -362,6 +371,7 @@ tracing-subscriber = { workspace = true, default-features = false, features = [
 ] }
 reqwest = { workspace = true, features = ["blocking", "rustls"] }
 itertools.workspace = true
+serde_json.workspace = true
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 wasmer = { version = "=7.4.0", path = "lib/api", default-features = false, features = [
@@ -394,6 +404,8 @@ engine = []
 cache = ["wasmer-cache"]
 wast = ["wasmer-wast"]
 wasi = ["wasmer-wasix", "tokio"]
+wasi-nn-demo = ["wasi", "wasmer-wasix/wasi-nn", "dep:wasmer-wasi-nn", "wasmer-wasi-nn/candle"]
+wasi-nn-demo-cuda = ["wasi-nn-demo", "wasmer-wasix/wasi-nn-cuda", "wasmer-wasi-nn/cuda"]
 wat = ["wasmer/wat"]
 compiler = ["wasmer/compiler", "backend", "wasmer-compiler/translator"]
 singlepass = ["compiler", "wasmer-compiler-singlepass", "wasmer/singlepass"]
@@ -405,6 +417,11 @@ wasmer-artifact-create = ["wasmer-compiler/wasmer-artifact-create"]
 static-artifact-load = ["wasmer-compiler/static-artifact-load"]
 static-artifact-create = ["wasmer-compiler/static-artifact-create"]
 experimental-async = ["wasmer/experimental-async"]
+
+# Gates the gpu-bridge example, since wgpu is a heavy compile-time dependency.
+gpu-bridge-example = ["wgpu", "pollster"]
+# Gates the gpu-bridge-train example (guest-owned training loop), same reason.
+gpu-bridge-train-example = ["wgpu", "pollster"]
 
 # Testing features
 test-singlepass = ["singlepass"]
@@ -613,6 +630,21 @@ required-features = ["cranelift"]
 name = "http-dynamic-size"
 path = "examples/http_dynamic_size.rs"
 required-features = ["cranelift"]
+
+[[example]]
+name = "gpu-bridge"
+path = "examples/gpu_bridge.rs"
+required-features = ["backend", "gpu-bridge-example"]
+
+[[example]]
+name = "gpu-bridge-train"
+path = "examples/gpu_bridge_train.rs"
+required-features = ["backend", "gpu-bridge-train-example"]
+
+[[example]]
+name = "wasi-nn-gpu-demo"
+path = "examples/wasi_nn_gpu_demo.rs"
+required-features = ["backend", "wasi-nn-demo"]
 
 [[example]]
 name = "throw-exception"
