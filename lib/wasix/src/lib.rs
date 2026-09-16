@@ -807,7 +807,10 @@ fn wasix_exports_64(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>)
 }
 
 #[cfg(feature = "wasi-nn")]
-fn wasi_ephemeral_nn_exports(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>) -> Exports {
+fn wasi_ephemeral_nn_exports(
+    mut store: &mut impl AsStoreMut,
+    env: &FunctionEnv<WasiEnv>,
+) -> Exports {
     use syscalls::*;
     let namespace = namespace! {
         "load" => Function::new_typed_with_env(&mut store, env, nn_load),
@@ -820,16 +823,23 @@ fn wasi_ephemeral_nn_exports(mut store: &mut impl AsStoreMut, env: &FunctionEnv<
     namespace
 }
 
-#[cfg(feature = "wasi-webgpu-spike")]
-fn wasi_webgpu_spike_exports(mut store: &mut impl AsStoreMut, env: &FunctionEnv<WasiEnv>) -> Exports {
+#[cfg(feature = "wasi-webgpu-concurrency")]
+fn wasi_webgpu_concurrency_exports(
+    mut store: &mut impl AsStoreMut,
+    env: &FunctionEnv<WasiEnv>,
+) -> Exports {
     use syscalls::*;
     let engine_supports_async = store.as_store_ref().engine().supports_async();
     let namespace = namespace! {
-        "request_adapter_spike" => if engine_supports_async {
-            Function::new_typed_with_env_async(&mut store, env, request_adapter_spike)
+        "request_adapter_start" => Function::new_typed_with_env(&mut store, env, request_adapter_start),
+        "waitable_set_new" => Function::new_typed_with_env(&mut store, env, waitable_set_new),
+        "waitable_join" => Function::new_typed_with_env(&mut store, env, waitable_join),
+        "waitable_set_wait" => if engine_supports_async {
+            Function::new_typed_with_env_async(&mut store, env, waitable_set_wait)
         } else {
-            Function::new_typed_with_env(&mut store, env, request_adapter_spike_not_supported)
+            Function::new_typed_with_env(&mut store, env, waitable_set_wait_not_supported)
         },
+        "subtask_drop" => Function::new_typed_with_env(&mut store, env, subtask_drop),
     };
     namespace
 }
@@ -865,11 +875,11 @@ fn import_object_for_all_wasi_versions(
         });
     }
 
-    #[cfg(feature = "wasi-webgpu-spike")]
+    #[cfg(feature = "wasi-webgpu-concurrency")]
     {
-        let exports_wasi_webgpu_spike = wasi_webgpu_spike_exports(store, env);
+        let exports_wasi_webgpu_v0 = wasi_webgpu_concurrency_exports(store, env);
         imports.extend(&imports! {
-            "wasi_webgpu_v0" => exports_wasi_webgpu_spike,
+            "wasi_webgpu_v0" => exports_wasi_webgpu_v0,
         });
     }
 

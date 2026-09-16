@@ -1038,6 +1038,8 @@ impl WasiEnvBuilder {
                 .unwrap_or_else(|| Arc::new(wasmer_wasi_nn::CpuStub)),
             #[cfg(feature = "wasi-nn")]
             nn: Default::default(),
+            #[cfg(feature = "wasi-webgpu-concurrency")]
+            webgpu: Default::default(),
         };
 
         let runtime = self.runtime.unwrap_or_else(|| {

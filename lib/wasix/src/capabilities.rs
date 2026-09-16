@@ -11,6 +11,7 @@ pub struct Capabilities {
     pub max_sock_recv_size: Option<u64>,
     pub threading: CapabilityThreadingV1,
     pub nn: CapabilityNnV1,
+    pub webgpu_spike: CapabilityWebgpuSpikeV1,
 }
 
 impl Capabilities {
@@ -22,6 +23,7 @@ impl Capabilities {
             max_sock_recv_size: Some(16 * 1024 * 1024),
             threading: Default::default(),
             nn: Default::default(),
+            webgpu_spike: Default::default(),
         }
     }
 
@@ -35,6 +37,7 @@ impl Capabilities {
             max_sock_recv_size,
             threading,
             nn,
+            webgpu_spike,
         } = other;
         self.insecure_allow_all |= insecure_allow_all;
         self.http_client.update(http_client);
@@ -42,6 +45,7 @@ impl Capabilities {
         self.max_sock_recv_size = max_sock_recv_size.or(self.max_sock_recv_size);
         self.threading.update(threading);
         self.nn.update(nn);
+        self.webgpu_spike.update(webgpu_spike);
     }
 }
 
@@ -173,5 +177,25 @@ impl CapabilityNnV1 {
         self.allow |= allow;
         self.allow_gpu |= allow_gpu;
         self.max_model_bytes = max_model_bytes.or(self.max_model_bytes);
+    }
+}
+
+/// Defines `wasi_webgpu_v0`'s Phase 1 async-concurrency-subset permissions.
+///
+/// Like [`CapabilityNnV1`], this is actively enforced at every
+/// `wasi_webgpu_v0` call site (see `syscalls/wasi_webgpu/`), not left as
+/// data-only plumbing. This ABI is not real `wasi:webgpu` -- see that
+/// module's doc comment for exactly what it is.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct CapabilityWebgpuSpikeV1 {
+    /// Whether any `wasi_webgpu_v0` host import is permitted at all.
+    /// (default = false)
+    pub allow: bool,
+}
+
+impl CapabilityWebgpuSpikeV1 {
+    pub fn update(&mut self, other: CapabilityWebgpuSpikeV1) {
+        let CapabilityWebgpuSpikeV1 { allow } = other;
+        self.allow |= allow;
     }
 }

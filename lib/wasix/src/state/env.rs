@@ -134,6 +134,8 @@ impl WasiEnvInit {
                 nn_backend: self.state.nn_backend.clone(),
                 #[cfg(feature = "wasi-nn")]
                 nn: Default::default(),
+                #[cfg(feature = "wasi-webgpu-concurrency")]
+                webgpu: Default::default(),
             },
             runtime: self.runtime.clone(),
             webc_dependencies: self.webc_dependencies.clone(),
