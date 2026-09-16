@@ -15,15 +15,26 @@
 //! transitions the entry under this state's lock and calls
 //! `Notify::notify_one()`; `Notify`'s single stored permit means a
 //! `waitable_set_wait` caller that checks-then-awaits never misses the
-//! wakeup, even if resolution races the check-and-drop-lock step. A waitable
-//! set is `Option<u32>` -- at most one joined subtask handle, matching Phase
-//! 1's single-waitable-per-set scope (see `syscalls/wasi_webgpu/mod.rs`'s
-//! module doc comment for why that boundary is deliberate, not a bug).
+//! wakeup, even if resolution races the check-and-drop-lock step.
+//!
+//! Phase 2a: a waitable set holds up to [`MAX_WAITABLES_PER_SET`] joined
+//! subtask handles (`Vec<u32>`, was `Option<u32>` in Phase 1's
+//! exactly-one-per-set scope). `waitable_set_wait` returns whichever member
+//! resolves *first*, then removes it from the set -- a subtask's resolution
+//! is a one-shot terminal event, so once delivered it is no longer
+//! monitored; the guest separately calls `subtask_drop` to free the handle
+//! itself. The cap exists for the same reason `examples/gpu_bridge.rs`'s
+//! `SessionLimits` does: a bounded per-instance resource, not an unbounded
+//! one a hostile guest could grow without limit.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use tokio::sync::Notify;
+
+/// Bounded fan-in per waitable set (Phase 2a's scope: N joined subtasks,
+/// still no real multi-task reentrancy -- see `syscalls/wasi_webgpu/mod.rs`).
+pub(crate) const MAX_WAITABLES_PER_SET: usize = 8;
 
 /// Wire-level status codes for `wasi_webgpu_v0`'s Phase 1 host imports.
 /// Modeled after `wasmer_wasi_nn::NnErrno`'s discriminant-per-condition
@@ -43,8 +54,8 @@ pub(crate) enum WebgpuErrno {
     MissingMemory = -3,
     /// The handle was never issued, or was already released.
     BadHandle = -4,
-    /// `waitable_join` targeted a set that already has a joined waitable --
-    /// Phase 1 supports exactly one waitable per set.
+    /// `waitable_join` targeted a set already at [`MAX_WAITABLES_PER_SET`]
+    /// members.
     SetOccupied = -5,
     /// `waitable_set_wait` targeted a set with no joined waitable.
     SetEmpty = -6,
@@ -64,20 +75,23 @@ pub(crate) enum SubtaskSlot {
     Resolved(u32),
 }
 
-/// Outcome of a non-blocking look-up of a waitable set's joined subtask.
+/// Outcome of a non-blocking look-up of a waitable set's joined subtasks.
 pub(crate) enum WaitOutcome {
-    /// Already resolved -- no need to await anything.
-    Ready(u32),
-    /// Still pending -- await this before re-checking.
-    Pending(Arc<Notify>),
+    /// One joined subtask has already resolved -- its handle and payload.
+    /// No need to await anything.
+    Ready(u32, u32),
+    /// All joined subtasks are still pending -- await any one of these
+    /// (handle, `Notify`) pairs before re-polling. Never empty: only
+    /// produced when the set has at least one member and none are resolved.
+    Pending(Vec<(u32, Arc<Notify>)>),
 }
 
 #[derive(Default, Debug)]
 pub(crate) struct WebgpuState {
     seed: u32,
     subtasks: HashMap<u32, SubtaskSlot>,
-    /// At most one joined subtask handle per set, per Phase 1's scope.
-    sets: HashMap<u32, Option<u32>>,
+    /// Up to [`MAX_WAITABLES_PER_SET`] joined subtask handles per set.
+    sets: HashMap<u32, Vec<u32>>,
 }
 
 impl WebgpuState {
@@ -118,44 +132,51 @@ impl WebgpuState {
 
     pub fn new_waitable_set(&mut self) -> Result<u32, WebgpuErrno> {
         let handle = self.next_handle()?;
-        self.sets.insert(handle, None);
+        self.sets.insert(handle, Vec::new());
         Ok(handle)
     }
 
     /// Joins `subtask` to `set`. Errors with [`WebgpuErrno::SetOccupied`]
-    /// rather than silently overwriting an existing join.
+    /// once `set` already holds [`MAX_WAITABLES_PER_SET`] members, rather
+    /// than growing it unboundedly.
     pub fn join(&mut self, subtask: u32, set: u32) -> Result<(), WebgpuErrno> {
         if !self.subtasks.contains_key(&subtask) {
             return Err(WebgpuErrno::BadHandle);
         }
-        let slot = self.sets.get_mut(&set).ok_or(WebgpuErrno::BadHandle)?;
-        if slot.is_some() {
+        let members = self.sets.get_mut(&set).ok_or(WebgpuErrno::BadHandle)?;
+        if members.len() >= MAX_WAITABLES_PER_SET {
             return Err(WebgpuErrno::SetOccupied);
         }
-        *slot = Some(subtask);
+        members.push(subtask);
         Ok(())
     }
 
     /// Non-blocking lookup used by `waitable_set_wait`'s fast path, and to
-    /// obtain the `Notify` to await on the slow path.
-    pub fn poll_wait(&self, set: u32) -> Result<(u32, WaitOutcome), WebgpuErrno> {
-        let subtask = self
-            .sets
-            .get(&set)
-            .ok_or(WebgpuErrno::BadHandle)?
-            .ok_or(WebgpuErrno::SetEmpty)?;
-        match self.subtasks.get(&subtask).ok_or(WebgpuErrno::BadHandle)? {
-            SubtaskSlot::Resolved(payload) => Ok((subtask, WaitOutcome::Ready(*payload))),
-            SubtaskSlot::Pending(notify) => Ok((subtask, WaitOutcome::Pending(notify.clone()))),
+    /// obtain the `(handle, Notify)` pairs to await on the slow path.
+    pub fn poll_wait(&self, set: u32) -> Result<WaitOutcome, WebgpuErrno> {
+        let members = self.sets.get(&set).ok_or(WebgpuErrno::BadHandle)?;
+        if members.is_empty() {
+            return Err(WebgpuErrno::SetEmpty);
         }
+        let mut pending = Vec::with_capacity(members.len());
+        for &subtask in members {
+            match self.subtasks.get(&subtask).ok_or(WebgpuErrno::BadHandle)? {
+                SubtaskSlot::Resolved(payload) => return Ok(WaitOutcome::Ready(subtask, *payload)),
+                SubtaskSlot::Pending(notify) => pending.push((subtask, notify.clone())),
+            }
+        }
+        Ok(WaitOutcome::Pending(pending))
     }
 
-    /// Re-checked after `.notified().await` resolves -- must be `Resolved`
-    /// by then, since exactly one permit was reserved for this waiter.
-    pub fn resolved_payload(&self, subtask: u32) -> Option<u32> {
-        match self.subtasks.get(&subtask) {
-            Some(SubtaskSlot::Resolved(payload)) => Some(*payload),
-            _ => None,
+    /// Removes `subtask` from `set`'s membership once its resolved event has
+    /// been delivered to the guest via `waitable_set_wait` -- a subtask's
+    /// terminal event fires once; after delivery it is no longer a
+    /// candidate for future waits on this (or any) set. The subtask handle
+    /// itself is untouched; the guest separately calls `subtask_drop` to
+    /// free it. A no-op if `set` or `subtask` no longer exist.
+    pub fn remove_from_set(&mut self, set: u32, subtask: u32) {
+        if let Some(members) = self.sets.get_mut(&set) {
+            members.retain(|&member| member != subtask);
         }
     }
 }
