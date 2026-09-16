@@ -25,6 +25,11 @@ path = "tests/wasi_nn.rs"
 required-features = ["wasi-nn", "sys-thread"]
 
 [[test]]
+name = "wasi_webgpu_spike"
+path = "tests/wasi_webgpu_spike.rs"
+required-features = ["wasi-webgpu-spike", "sys-thread"]
+
+[[test]]
 name = "wasi_runner_nn"
 path = "tests/wasi_runner_nn.rs"
 required-features = ["wasi-nn", "sys-thread"]
@@ -258,6 +263,10 @@ sys-thread = ["tokio/rt", "tokio/time", "tokio/rt-multi-thread", "rusty_pool"]
 journal = ["tokio/fs", "wasmer-journal/log-file"]
 wasi-nn = ["dep:wasmer-wasi-nn", "wasmer-wasi-nn/candle"]
 wasi-nn-cuda = ["wasi-nn", "wasmer-wasi-nn/cuda"]
+
+# Phase-0 spike: one fake async wasix host import proving guest suspend/resume
+# works through a real wasm guest. Not part of any real wasi:webgpu ABI.
+wasi-webgpu-spike = ["tokio/time"]
 
 # Deprecated. Kept it for compatibility
 compiler = []
