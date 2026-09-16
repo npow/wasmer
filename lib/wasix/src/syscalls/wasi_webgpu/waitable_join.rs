@@ -2,10 +2,11 @@ use crate::state::WebgpuErrno;
 use crate::syscalls::*;
 
 /// ### `waitable_join()`
-/// Associates subtask handle `waitable` with waitable set `set`. Phase 1
-/// supports exactly one joined waitable per set -- joining a second one
-/// before the first is dropped returns [`WebgpuErrno::SetOccupied`] rather
-/// than silently overwriting it.
+/// Associates subtask handle `waitable` with waitable set `set`. A set holds
+/// up to `MAX_WAITABLES_PER_SET` joined subtasks (Phase 2a's bounded fan-in
+/// scope; Phase 1 capped this at exactly one) -- joining past that cap
+/// returns [`WebgpuErrno::SetOccupied`] rather than growing the set
+/// unboundedly.
 #[instrument(level = "trace", skip_all)]
 pub fn waitable_join(ctx: FunctionEnvMut<'_, WasiEnv>, waitable: i32, set: i32) -> i32 {
     match waitable_join_inner(ctx, waitable, set) {
