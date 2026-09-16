@@ -1,11 +1,12 @@
-use crate::state::WebgpuErrno;
+use crate::state::{WaitableKind, WebgpuErrno};
 use crate::syscalls::*;
 
 /// ### `subtask_drop()`
-/// Releases subtask handle `subtask`. Safe to call whether or not the
-/// subtask has resolved yet -- a pending subtask's background task simply
-/// becomes a no-op once it completes (see
-/// [`crate::state::WebgpuState::resolve_subtask`]).
+/// Releases subtask handle `subtask`. Errors with [`WebgpuErrno::BadHandle`]
+/// if `subtask` names a future instead (see `future_drop`). Safe to call
+/// whether or not the subtask has resolved yet -- a pending subtask's
+/// background task simply becomes a no-op once it completes (see
+/// [`crate::state::WebgpuState::resolve_waitable`]).
 #[instrument(level = "trace", skip_all)]
 pub fn subtask_drop(ctx: FunctionEnvMut<'_, WasiEnv>, subtask: i32) -> i32 {
     match subtask_drop_inner(ctx, subtask) {
@@ -25,5 +26,5 @@ fn subtask_drop_inner(ctx: FunctionEnvMut<'_, WasiEnv>, subtask: i32) -> Result<
         .webgpu
         .lock()
         .unwrap()
-        .drop_subtask(subtask)
+        .drop_waitable(subtask, WaitableKind::Subtask)
 }

@@ -53,7 +53,12 @@ fn request_adapter_start_inner(
     };
 
     let env = ctx.data();
-    let (handle, notify) = env.state.webgpu.lock().unwrap().insert_pending_subtask()?;
+    let handle = env
+        .state
+        .webgpu
+        .lock()
+        .unwrap()
+        .insert_pending(crate::state::WaitableKind::Subtask)?;
 
     // Spawned onto the shared task pool, not run inline: this is the "start"
     // half of start/wait, so it must return to the guest immediately.
@@ -65,12 +70,16 @@ fn request_adapter_start_inner(
                 .webgpu
                 .lock()
                 .unwrap()
-                .resolve_subtask(handle, FAKE_ADAPTER_ID);
-            notify.notify_one();
+                .resolve_waitable(handle, FAKE_ADAPTER_ID);
         })
     }));
     if spawn_result.is_err() {
-        let _ = env.state.webgpu.lock().unwrap().drop_subtask(handle);
+        let _ = env
+            .state
+            .webgpu
+            .lock()
+            .unwrap()
+            .drop_waitable(handle, crate::state::WaitableKind::Subtask);
         return Err(WebgpuErrno::Unsupported);
     }
 
