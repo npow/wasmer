@@ -13,6 +13,11 @@
 //! happens on the host side of the (ptr, len) boundary, via the `wgpu`
 //! crate.
 //!
+//! Every session (one [`GpuState`] per guest instance) is capped by
+//! [`SessionLimits`]: a guest that tries to allocate past the buffer count,
+//! total buffer bytes, or pipeline count limit gets `ERR_QUOTA` back from
+//! `buffer_upload`/`pipeline_create` instead of exhausting real GPU memory.
+//!
 //! You can run the example directly by executing in the Wasmer root:
 //!
 //! ```shell
@@ -61,6 +66,28 @@ const SUCCESS: i32 = 0;
 const ERR_RANGE: i32 = -1;
 /// The handle was never issued, or was already released.
 const ERR_HANDLE: i32 = -2;
+/// Allocating would exceed this session's [`SessionLimits`].
+const ERR_QUOTA: i32 = -3;
+
+/// Per-session caps, checked before every allocating call. Demo-scale
+/// defaults, not a hardened sandbox: enough to stop a buggy or hostile guest
+/// from silently exhausting real GPU memory in a loop.
+#[derive(Clone, Copy, Debug)]
+struct SessionLimits {
+    max_buffers: usize,
+    max_bytes: u64,
+    max_pipelines: usize,
+}
+
+impl Default for SessionLimits {
+    fn default() -> Self {
+        Self {
+            max_buffers: 8,
+            max_bytes: 1024 * 1024,
+            max_pipelines: 4,
+        }
+    }
+}
 
 /// Per-instance GPU resource tables: guest-owned buffers and compute
 /// pipelines, addressed by opaque handles the guest holds onto across calls.
@@ -72,6 +99,10 @@ struct GpuState {
     pipelines: HashMap<u32, wgpu::ComputePipeline>,
     next_buffer: u32,
     next_pipeline: u32,
+    limits: SessionLimits,
+    /// Running total of `buffers`' sizes, kept in sync by `alloc_buffer` and
+    /// `buffer_release` so the byte quota never needs to re-sum the map.
+    buffer_bytes: u64,
 }
 
 impl GpuState {
@@ -101,21 +132,34 @@ impl GpuState {
             pipelines: HashMap::new(),
             next_buffer: 0,
             next_pipeline: 0,
+            limits: SessionLimits::default(),
+            buffer_bytes: 0,
         }
     }
 
-    fn alloc_buffer(&mut self, buffer: wgpu::Buffer) -> u32 {
+    /// `None` if allocating `buffer` would exceed `limits`.
+    fn alloc_buffer(&mut self, buffer: wgpu::Buffer) -> Option<u32> {
+        if self.buffers.len() >= self.limits.max_buffers
+            || self.buffer_bytes + buffer.size() > self.limits.max_bytes
+        {
+            return None;
+        }
         let handle = self.next_buffer;
         self.next_buffer += 1;
+        self.buffer_bytes += buffer.size();
         self.buffers.insert(handle, buffer);
-        handle
+        Some(handle)
     }
 
-    fn alloc_pipeline(&mut self, pipeline: wgpu::ComputePipeline) -> u32 {
+    /// `None` if allocating another pipeline would exceed `limits`.
+    fn alloc_pipeline(&mut self, pipeline: wgpu::ComputePipeline) -> Option<u32> {
+        if self.pipelines.len() >= self.limits.max_pipelines {
+            return None;
+        }
         let handle = self.next_pipeline;
         self.next_pipeline += 1;
         self.pipelines.insert(handle, pipeline);
-        handle
+        Some(handle)
     }
 }
 
@@ -155,7 +199,10 @@ fn buffer_upload(mut ctx: FunctionEnvMut<GpuBridgeEnv>, ptr: u32, len: u32) -> i
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
         });
-    ctx.data_mut().gpu.alloc_buffer(buffer) as i32
+    match ctx.data_mut().gpu.alloc_buffer(buffer) {
+        Some(handle) => handle as i32,
+        None => ERR_QUOTA,
+    }
 }
 
 /// Host import: reads `len` bytes back from buffer `handle` into guest
@@ -234,8 +281,12 @@ fn buffer_write(
 
 /// Host import: releases buffer `handle`. The handle is invalid afterward.
 fn buffer_release(mut ctx: FunctionEnvMut<GpuBridgeEnv>, handle: u32) -> i32 {
-    match ctx.data_mut().gpu.buffers.remove(&handle) {
-        Some(_) => SUCCESS,
+    let gpu = &mut ctx.data_mut().gpu;
+    match gpu.buffers.remove(&handle) {
+        Some(buffer) => {
+            gpu.buffer_bytes -= buffer.size();
+            SUCCESS
+        }
         None => ERR_HANDLE,
     }
 }
@@ -273,7 +324,10 @@ fn pipeline_create(mut ctx: FunctionEnvMut<GpuBridgeEnv>, ptr: u32, len: u32) ->
                 compilation_options: Default::default(),
                 cache: None,
             });
-    ctx.data_mut().gpu.alloc_pipeline(pipeline) as i32
+    match ctx.data_mut().gpu.alloc_pipeline(pipeline) {
+        Some(handle) => handle as i32,
+        None => ERR_QUOTA,
+    }
 }
 
 /// Host import: dispatches pipeline `pipeline` against buffer `buffer` with
@@ -360,7 +414,18 @@ fn main() -> Result<()> {
     (drop (call $pipeline_dispatch (local.get $pipe) (local.get $buf) (i32.const 1) (i32.const 1) (i32.const 1)))
     (drop (call $buffer_read (local.get $buf) (local.get $ptr) (local.get $len)))
     (drop (call $pipeline_release (local.get $pipe)))
-    (drop (call $buffer_release (local.get $buf)))))
+    (drop (call $buffer_release (local.get $buf))))
+  (func (export "run_quota_test") (param $ptr i32) (param $len i32) (param $iterations i32) (result i32)
+    (local $i i32)
+    (local $last i32)
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $continue
+        (br_if $done (i32.ge_s (local.get $i) (local.get $iterations)))
+        (local.set $last (call $buffer_upload (local.get $ptr) (local.get $len)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $continue)))
+    (local.get $last)))
 "#
     );
     let wasm_bytes = wat2wasm(wat.as_bytes())?;
@@ -402,6 +467,27 @@ fn main() -> Result<()> {
 
     println!("input: {input:?} -> output: {output:?}");
     assert_eq!(output, input.iter().map(|v| v * 2.0).collect::<Vec<_>>());
+
+    // Prove the quota actually rejects a guest, rather than letting it
+    // silently exhaust GPU memory: call buffer_upload one more time than
+    // this session's max_buffers allows (via the guest's own loop, not a
+    // host shortcut) and check the last call's return value.
+    let max_buffers = SessionLimits::default().max_buffers as i32;
+    let run_quota_test: TypedFunction<(i32, i32, i32), i32> = instance
+        .exports
+        .get_function("run_quota_test")?
+        .typed(&store)?;
+    let last_result = run_quota_test.call(&mut store, ptr as i32, byte_len, max_buffers + 1)?;
+    println!(
+        "quota check: {} buffer_upload calls (max_buffers={max_buffers}) -> last call returned {last_result}",
+        max_buffers + 1
+    );
+    assert_eq!(
+        last_result,
+        ERR_QUOTA,
+        "expected the ({}) th buffer_upload to be rejected with ERR_QUOTA",
+        max_buffers + 1
+    );
 
     Ok(())
 }
